@@ -51,3 +51,28 @@ class LassoNet(nn.Module):
 
     def cpu_state_dict(self):
         return {k: v.detach().clone().cpu() for k, v in self.state_dict().items()}
+
+
+class LassoNetAE(LassoNet):
+    def __init__(self, encoder_dims, decoder_dims):
+        """
+        first dimension is input
+        last dimension is output
+        """
+        assert encoder_dims[-1] == decoder_dims[0], "Encoder and decoder don't match"
+        assert encoder_dims[0] == decoder_dims[-1], "Encoder and decoder don't match"
+        super().__init__(*encoder_dims)
+        self.decoder_layers = nn.ModuleList(
+            [
+                nn.Linear(decoder_dims[i], decoder_dims[i + 1])
+                for i in range(len(decoder_dims) - 1)
+            ]
+        )
+
+    def forward(self, inp):
+        ans = super().forward(inp)
+        for theta in self.decoder_layers:
+            ans = theta(ans)
+            if theta is not self.decoder_layers[-1]:
+                ans = F.relu(ans)
+        return ans

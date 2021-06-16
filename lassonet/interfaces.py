@@ -14,7 +14,7 @@ from sklearn.base import (
 from sklearn.model_selection import train_test_split
 import torch
 
-from .model import LassoNet
+from .model import LassoNet, LassoNetAE
 
 
 def abstractattr(f):
@@ -61,6 +61,8 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         ----------
         hidden_dims : tuple of int, default=(100,)
             Shape of the hidden layers.
+            For LassoNetAutoEncoder, this should be a tuple of 3 values:
+            encoder_layers, latent_space, decoder_layers
         eps_start : float, default=1
             Sets lambda_start such that it has a strength comparable to the
             loss of the unconstrained model multiplied by eps_start.
@@ -487,6 +489,36 @@ class LassoNetClassifier(
         return ans
 
 
+class LassoNetAutoEncoder(LassoNetRegressor):
+    def __init__(self, *, hidden_dims=((100,), 10, (100,)), **kwargs):
+        kwargs["hidden_dims"] = hidden_dims
+        super().__init__(**kwargs)
+
+    def _init_model(self, X, y):
+        """Create a torch model"""
+        if self.torch_seed is not None:
+            torch.manual_seed(self.torch_seed)
+        dim = X.shape[1]
+        encoder, latent, decoder = self.hidden_dims
+        encoder = (
+            dim,
+            *encoder,
+            latent,
+        )
+        decoder = (
+            latent,
+            *decoder,
+            dim,
+        )
+        self.model = LassoNetAE(encoder, decoder).to(self.device)
+
+    def fit(self, X, y=None, *, X_val=None, y_val=None):
+        return super().fit(X, X, X_val=X_val, y_val=X_val)
+
+    def path(self, X, y=None, *, X_val=None, y_val=None, lambda_=None):
+        return super().path(X, X, X_val=X_val, y_val=X_val, lambda_=lambda_)
+
+
 def lassonet_path(X, y, task, *, X_val=None, y_val=None, **kwargs):
     """
     Parameters
@@ -495,7 +527,7 @@ def lassonet_path(X, y, task, *, X_val=None, y_val=None, **kwargs):
         Training data
     y : array-like of shape (n_samples,) or (n_samples, n_outputs)
         Target values
-    task : str, must be "classification" or "regression"
+    task : str, must be "classification", "regression" or "unsupervised"
         Task
     X_val : array-like of shape (n_samples, n_features)
         Validation data
@@ -508,6 +540,10 @@ def lassonet_path(X, y, task, *, X_val=None, y_val=None, **kwargs):
         model = LassoNetClassifier(**kwargs)
     elif task == "regression":
         model = LassoNetRegressor(**kwargs)
+    elif task == "unsupervised":
+        model = LassoNetAutoEncoder(**kwargs)
     else:
-        raise ValueError('task must be "classification" or "regression"')
+        raise ValueError(
+            'task must be "classification", "regression" or "unsupervised"'
+        )
     return model.path(X, y, X_val=X_val, y_val=y_val)
