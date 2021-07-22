@@ -12,7 +12,9 @@ from sklearn.base import (
     RegressorMixin,
 )
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 import torch
+import matplotlib.pyplot as plt
 
 from .model import LassoNet
 
@@ -29,6 +31,7 @@ class HistoryItem:
     loss: float
     val_objective: float  # val_loss + lambda_ * regulatization
     val_loss: float
+    val_acc: float
     regularization: float
     selected: torch.BoolTensor
     n_iters: int
@@ -266,11 +269,18 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         else:
             n_iters = epoch + 1
         reg = self.model.regularization().item()
+
+        try:
+            val_acc = accuracy_score(y_val, self.predict(X_val))
+        except:
+            val_acc = None
+
         return HistoryItem(
             lambda_=lambda_,
             state_dict=self.model.cpu_state_dict(),
             objective=loss + lambda_ * reg,
             loss=loss,
+            val_acc=val_acc,
             val_objective=val_obj,
             val_loss=val_obj - lambda_ * reg,
             regularization=reg,
