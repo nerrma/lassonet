@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def plot_path(model, path, X_test, y_test):
@@ -49,3 +50,20 @@ def plot_path(model, path, X_test, y_test):
     plt.ylabel("number of selected features")
 
     plt.tight_layout()
+
+def plot_importance(state_dict: dict):
+    width = 0.3
+    abs_weights = np.abs(state_dict['skip.weight'][0].cpu().numpy())
+    plt.barh(np.arange(len(abs_weights)),np.sort(abs_weights), width)
+    plt.title("Feature importance")
+
+    plt.yticks(np.arange(len(abs_weights)), np.argsort(abs_weights))
+    plt.xticks(np.linspace(0, max(abs_weights), 5))
+
+    plt.xlabel("Absolute skip layer weight corresponding to feature")
+    plt.ylabel("Features")
+
+    plt.grid(linewidth=1.1)
+
+    plt.tight_layout()
+    plt.show()
