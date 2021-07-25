@@ -72,6 +72,3 @@ class LassoNetModel():
             k = np.count_nonzero(self.model.skip_layer.weight.detach().numpy())
             i += 1
             print(f"Iteration {i}, k = {k}")
-
-general_model = LassoNetModel(dims=[3, 20, 20, 3])
-general_model.train_lassonet(torch.Tensor([1, 0, 1]), torch.Tensor([1, 1, 1]), 4)
