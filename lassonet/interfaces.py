@@ -11,7 +11,7 @@ from sklearn.base import (
     MultiOutputMixin,
     RegressorMixin,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import accuracy_score
 import torch
 import matplotlib.pyplot as plt
@@ -54,6 +54,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         tol=0.99,
         backtrack=False,
         val_size=0.1,
+        n_splits=5,
         device=None,
         verbose=0,
         random_state=None,
@@ -131,6 +132,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         self.patience = self.patience_init, self.patience_path = patience
         self.tol = tol
         self.backtrack = backtrack
+        self.n_splits = n_splits
         self.val_size = val_size
         self.device = device
         if device is None:
@@ -185,18 +187,33 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
     def _train(
         self,
-        X_train,
-        y_train,
-        X_val,
-        y_val,
+        X,
+        y,
         *,
         batch_size,
         epochs,
+        n_splits,
         lambda_,
         optimizer,
         patience=None,
     ) -> HistoryItem:
         model = self.model
+
+        kf = KFold(n_splits=n_splits)
+
+        train_idx = [None] * kf.get_n_splits()
+        val_idx = [None] * kf.get_n_splits()
+
+        i = 0
+        for train, val in kf.split(X):
+            train_idx[i], val_idx[i] = train, val
+            i += 1
+
+        X_train = X[train_idx[0]]
+        y_train = y[train_idx[0]]
+
+        X_val = X[val_idx[0]]
+        y_val = y[val_idx[0]]
 
         def validation_obj():
             with torch.no_grad():
@@ -215,7 +232,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
         n_iters = 0
 
-        n_train = len(X_train)
+        n_train = len(X[train_idx[0]])
         if batch_size is None:
             batch_size = n_train
             randperm = torch.arange
@@ -223,10 +240,20 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             randperm = torch.randperm
         batch_size = min(batch_size, n_train)
 
+        j = 0
         for epoch in range(epochs):
-            indices = randperm(n_train)
+            if j >= kf.get_n_splits():
+                j = 0
+
             model.train()
             loss = 0
+            indices = train_idx[j]
+            X_val = X[val_idx[j]]
+            y_val = y[val_idx[j]]
+            
+            j += 1
+            #X_train = X[train_idx[j]]
+            #y_train = y[train_idx[j]]
             for i in range(n_train // batch_size):
                 # don't take batches that are not full
                 batch = indices[i * batch_size : (i + 1) * batch_size]
@@ -234,7 +261,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
                 def closure():
                     nonlocal loss
                     optimizer.zero_grad()
-                    ans = self.criterion(model(X_train[batch]), y_train[batch])
+                    ans = self.criterion(model(X[batch]), y[batch])
                     ans.backward()
                     loss += ans.item() * len(batch) / n_train
                     return ans
@@ -306,32 +333,21 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         The optional `lambda_` argument will also stop the path when
         this value is reached.
         """
-        assert (sample_val := X_val is None) == (
-            y_val is None
-        ), "You must specify both or none of X_val and y_val"
-        if sample_val:
-            X_train, X_val, y_train, y_val = train_test_split(
-                X, y, test_size=self.val_size
-            )
-        else:
-            X_train, y_train = X, y
-        X_train, y_train = self._cast_input(X_train, y_train)
-        X_val, y_val = self._cast_input(X_val, y_val)
+        X, y = self._cast_input(X, y)
 
         hist: List[HistoryItem] = []
 
         if self.model is None:
-            self._init_model(X_train, y_train)
+            self._init_model(X, y)
 
         hist.append(
             self._train(
-                X_train,
-                y_train,
-                X_val,
-                y_val,
+                X,
+                y,
                 batch_size=self.batch_size,
                 lambda_=0,
                 epochs=self.n_iters_init,
+                n_splits=self.n_splits,
                 optimizer=self.optim_init(self.model.parameters()),
                 patience=self.patience_init,
             )
@@ -365,13 +381,12 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
                 break
             hist.append(
                 self._train(
-                    X_train,
-                    y_train,
-                    X_val,
-                    y_val,
+                    X,
+                    y,
                     batch_size=self.batch_size,
                     lambda_=current_lambda,
                     epochs=self.n_iters_path,
+                    n_splits=self.n_splits,
                     optimizer=optimizer,
                     patience=self.patience_path,
                 )
