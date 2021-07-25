@@ -51,19 +51,25 @@ def plot_path(model, path, X_test, y_test):
 
     plt.tight_layout()
 
-def plot_importance(state_dict: dict):
+def plot_importance(model):
     width = 0.3
-    abs_weights = np.abs(state_dict['skip.weight'][0].cpu().numpy())
-    plt.barh(np.arange(len(abs_weights)),np.sort(abs_weights), width)
-    plt.title("Feature importance")
+    importances = model.feature_importances_.numpy()
+    #importances = importances/np.linalg.norm(importances)
+    plt.barh(np.arange(len(importances)),np.sort(importances), width)
+    plt.title("Feature importances")
 
-    plt.yticks(np.arange(len(abs_weights)), np.argsort(abs_weights))
-    plt.xticks(np.linspace(0, max(abs_weights), 5))
+    plt.yticks(np.arange(len(importances)), np.argsort(importances))
+    plt.xticks(np.linspace(0, max(importances), 5))
 
-    plt.xlabel("Absolute skip layer weight corresponding to feature")
+    plt.xlabel(r"Historic importance based on $\lambda$")
     plt.ylabel("Features")
 
     plt.grid(linewidth=1.1)
+
+    ag_sort = np.argsort(importances)
+    for i in np.argsort(importances):
+        j = ag_sort[i] 
+        plt.text(importances[j],i, int(importances[j]))
 
     plt.tight_layout()
     plt.show()
