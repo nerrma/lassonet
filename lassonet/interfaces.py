@@ -252,8 +252,6 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             y_val = y[val_idx[j]]
             
             j += 1
-            #X_train = X[train_idx[j]]
-            #y_train = y[train_idx[j]]
             for i in range(n_train // batch_size):
                 # don't take batches that are not full
                 batch = indices[i * batch_size : (i + 1) * batch_size]
@@ -272,10 +270,16 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
                         lambda_=lambda_ * optimizer.param_groups[0]["lr"], M=self.M
                     )
 
+            try:
+                val_acc = accuracy_score(y_val.cpu(), self.predict(X_val.cpu()).cpu())
+            except:
+                val_acc = None
+
             if epoch == 0:
                 # fallback to running loss of first epoch
                 real_loss = loss
             val_obj = validation_obj()
+
             if val_obj < self.tol * best_val_obj:
                 best_val_obj = val_obj
                 epochs_since_best_val_obj = 0
@@ -297,10 +301,6 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             n_iters = epoch + 1
         reg = self.model.regularization().item()
 
-        try:
-            val_acc = accuracy_score(y_val, self.predict(X_val))
-        except:
-            val_acc = None
 
         return HistoryItem(
             lambda_=lambda_,
