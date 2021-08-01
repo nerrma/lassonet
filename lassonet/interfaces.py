@@ -204,11 +204,13 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         train_idx = [None] * kf.get_n_splits()
         val_idx = [None] * kf.get_n_splits()
 
+        # Get indices for k-Fold cross val
         i = 0
         for train, val in kf.split(X):
             train_idx[i], val_idx[i] = train, val
             i += 1
 
+        # Initialise train and validation datasets
         X_train = X[train_idx[0]]
         y_train = y[train_idx[0]]
 
@@ -240,6 +242,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             randperm = torch.randperm
         batch_size = min(batch_size, n_train)
 
+        # Train the model and use k-fold cross validation to find the best
         j = 0
         for epoch in range(epochs):
             if j >= kf.get_n_splits():
