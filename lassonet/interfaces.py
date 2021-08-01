@@ -12,7 +12,8 @@ from sklearn.base import (
     RegressorMixin,
 )
 from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.metrics import accuracy_score, log_loss, mean_squared_error 
 import torch
 import matplotlib.pyplot as plt
 
@@ -32,6 +33,8 @@ class HistoryItem:
     val_objective: float  # val_loss + lambda_ * regulatization
     val_loss: float
     val_acc: float
+    val_mse: float
+    val_log_loss: float
     regularization: float
     selected: torch.BoolTensor
     n_iters: int
@@ -201,16 +204,16 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
         kf = KFold(n_splits=n_splits)
 
+        val_mse = []
+
         train_idx = [None] * kf.get_n_splits()
         val_idx = [None] * kf.get_n_splits()
 
-        # Get indices for k-Fold cross val
         i = 0
         for train, val in kf.split(X):
             train_idx[i], val_idx[i] = train, val
             i += 1
 
-        # Initialise train and validation datasets
         X_train = X[train_idx[0]]
         y_train = y[train_idx[0]]
 
@@ -242,7 +245,6 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             randperm = torch.randperm
         batch_size = min(batch_size, n_train)
 
-        # Train the model and use k-fold cross validation to find the best
         j = 0
         for epoch in range(epochs):
             if j >= kf.get_n_splits():
@@ -275,8 +277,16 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
             try:
                 val_acc = accuracy_score(y_val.cpu(), self.predict(X_val.cpu()).cpu())
+                val_log_loss = log_loss(y_val.cpu().numpy(), self.predict_proba(X_val.cpu()).cpu().numpy())
             except:
                 val_acc = None
+                val_log_loss = None
+
+            try:
+                mse = mean_squared_error(self.predict(X_val.cpu()).cpu(), y_val.cpu())
+                val_mse.append(mse)
+            except:
+                val_mse = None
 
             if epoch == 0:
                 # fallback to running loss of first epoch
@@ -313,6 +323,8 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
             val_acc=val_acc,
             val_objective=val_obj,
             val_loss=val_obj - lambda_ * reg,
+            val_log_loss=val_log_loss,
+            val_mse=val_mse,
             regularization=reg,
             selected=self.model.input_mask(),
             n_iters=n_iters,

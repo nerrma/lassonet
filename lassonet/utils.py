@@ -73,3 +73,30 @@ def plot_importance(model):
 
     plt.tight_layout()
     plt.show()
+
+# Define and plot normalised feature importances for all models which allow it
+def plt_imp(imp, name):
+    imp = np.array(imp)
+
+    # Normalise importances
+    imp = imp/np.linalg.norm(imp)
+    width = 0.3
+
+    # Plot importances similar to XGBoost
+    plt.barh(np.arange(len(imp)),np.sort(imp), width)
+    plt.yticks(np.arange(len(imp)), np.argsort(imp))
+    plt.title(f"{name} Feature importance")
+    
+    plt.xticks(np.linspace(0, max(imp), 5))
+    plt.ylabel("Feature")
+    plt.xlabel("Normalised Importance")
+    
+    plt.grid(linewidth=1.1)
+    
+    ag_sort = np.argsort(imp)
+    for i in np.argsort(imp):
+        j = ag_sort[i]
+        plt.text(imp[j],i, str(round(imp[j],2)))
+        
+    plt.show()
+

@@ -1,3 +1,12 @@
+# simplified_training -
+# This is an example implementation of the training algorithm shown
+# in the LassoNet paper using Pytorch
+#
+# Link to paper - https://arxiv.org/abs/1907.12207
+
+# A LassoNet model will train on the Boston housing dataset
+# and plot its predictions against the real values
+
 import torch
 from torch import nn
 from torch.nn import functional as F
